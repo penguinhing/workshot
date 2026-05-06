@@ -1,3 +1,14 @@
+<table>
+  <tr>
+    <td>
+      <img src="https://github.com/user-attachments/assets/7b3221ca-2fca-41b8-b955-25434083c1bd" width="100%">
+    </td>
+    <td>
+      <img width="1195" height="798" alt="Image" src="https://github.com/user-attachments/assets/2fd4093b-c7ec-4140-91a3-05f33de01a98" />
+    </td>
+  </tr>
+</table>
+
 # WorkShot
 
 프로젝트의 소스 코드 상태(Git 커밋)와 데이터베이스를 한 시점으로 묶어 `.workshot` 파일로 저장하고, 같은 시점으로 손쉽게 복구하는 데스크톱 도구입니다.
@@ -66,7 +77,3 @@ dumps/
 - [src/shared/](src/shared/) — main/renderer 공유 TypeScript 타입과 IPC 채널 상수
 
 자세한 개발 가이드는 [CLAUDE.md](CLAUDE.md)를 참고하세요.
-
-## 라이선스
-
-미정 (private)
