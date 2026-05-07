@@ -4,7 +4,7 @@
 
 ## 프로젝트 개요
 
-WorkShot은 프로젝트 소스 코드(Git 커밋)와 PostgreSQL DB 상태를 한 시점으로 묶어 `.workshot` 파일로 저장/복원하는 Electron 데스크톱 앱입니다. 디자인 시스템은 SPITZ 팔레트, 탭 분리 레이아웃, Compact 밀도, segmented 진행률을 사용합니다.
+WorkShot은 프로젝트 소스 코드(Git 커밋)와 PostgreSQL DB 상태를 한 시점으로 묶어 `.workshot` 파일로 저장/복원하는 Electron 데스크톱 앱입니다. 탭 분리 레이아웃, Compact 밀도, segmented 진행률을 사용합니다.
 
 `_design_reference/`에 원본 디자인 핸드오프 번들이 보존되어 있습니다 (HTML/CSS/JSX 프로토타입). 시각 동작이 모호하면 이 폴더를 1차 출처로 참고하세요.
 
