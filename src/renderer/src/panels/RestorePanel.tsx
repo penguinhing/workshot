@@ -155,13 +155,6 @@ export function RestorePanel({
         restoreDbsRef.current = next;
         setRestoreDbs(next);
         setStatuses({});
-        if (matched > 0) {
-          pushToast({
-            kind: 'info',
-            icon: 'bx-history',
-            message: `이 경로에 저장된 DB 접속 정보 ${matched}개를 불러왔습니다`,
-          });
-        }
       });
     return () => {
       cancelled = true;

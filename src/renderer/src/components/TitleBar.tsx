@@ -37,7 +37,7 @@ export function TitleBar() {
         <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.primary, letterSpacing: 0 }}>
           WorkShot
         </span>
-        <span style={{ fontFamily: MONO, fontSize: 10.5, color: COLORS.textLight }}>v0.0.1</span>
+        <span style={{ fontFamily: MONO, fontSize: 10.5, color: COLORS.textLight }}>v0.0.2</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'stretch' }}>
         <button
