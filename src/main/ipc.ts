@@ -123,7 +123,7 @@ export function registerIpcHandlers(window: BrowserWindow): void {
     }
     update(0, { status: 'done', percent: 100, detail: git.commitHash });
 
-    const snapshotsDir = join(storeApi.getBaseDir(), 'snapshots');
+    const snapshotsDir = storeApi.getSnapshotsDir();
     if (!existsSync(snapshotsDir)) mkdirSync(snapshotsDir, { recursive: true });
     const ts = new Date();
     const stamp =
@@ -332,8 +332,11 @@ export function registerIpcHandlers(window: BrowserWindow): void {
     return { ok: true, autoBackupPath };
   });
 
-  ipcMain.handle(IPC.listHistory, async () => storeApi.listHistory());
-  ipcMain.handle(IPC.removeHistory, async (_e, id: string) => storeApi.removeHistory(id));
+  ipcMain.handle(IPC.listHistory, async () => storeApi.syncSnapshotsHistory());
+  ipcMain.handle(IPC.removeHistory, async (_e, args: string | { id: string; filePath?: string }) => {
+    if (typeof args === 'string') storeApi.removeHistory(args);
+    else storeApi.removeHistory(args.id, args.filePath);
+  });
   ipcMain.handle(IPC.listProfiles, async () => storeApi.listProfiles());
   ipcMain.handle(IPC.saveProfile, async (_e, p) => storeApi.saveProfile(p));
   ipcMain.handle(IPC.removeProfile, async (_e, id: string) => storeApi.removeProfile(id));
@@ -348,7 +351,5 @@ export function registerIpcHandlers(window: BrowserWindow): void {
     if (existsSync(filePath)) shell.showItemInFolder(filePath);
   });
 
-  ipcMain.handle(IPC.getSnapshotsDir, async () =>
-    join(storeApi.getBaseDir(), 'snapshots'),
-  );
+  ipcMain.handle(IPC.getSnapshotsDir, async () => storeApi.getSnapshotsDir());
 }

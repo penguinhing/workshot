@@ -28,7 +28,7 @@ export interface WorkShotApi {
     opts: RestoreOptions & { jobId: string },
   ) => Promise<{ ok: true; autoBackupPath: string | null }>;
   listHistory: () => Promise<SnapshotHistoryItem[]>;
-  removeHistory: (id: string) => Promise<void>;
+  removeHistory: (id: string, filePath?: string) => Promise<void>;
   listProfiles: () => Promise<DBProfile[]>;
   saveProfile: (p: DBProfile) => Promise<void>;
   removeProfile: (id: string) => Promise<void>;

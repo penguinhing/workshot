@@ -96,7 +96,29 @@ export async function unpackWorkshot(workshotPath: string): Promise<UnpackResult
   return { manifest, extractDir, dumpPaths };
 }
 
-export function readManifestOnly(workshotPath: string): Promise<SnapshotManifest> {
-  return unpackWorkshot(workshotPath).then((r) => r.manifest);
-}
+export async function readManifestOnly(workshotPath: string): Promise<SnapshotManifest> {
+  const extract = tar.extract();
+  let manifest: SnapshotManifest | null = null;
 
+  extract.on('entry', (header, stream, next) => {
+    if (header.name === 'manifest.json') {
+      const chunks: Buffer[] = [];
+      stream.on('data', (c) => chunks.push(c));
+      stream.on('end', () => {
+        try {
+          manifest = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          next();
+        } catch (e) {
+          next(e as Error);
+        }
+      });
+    } else {
+      stream.on('end', () => next());
+      stream.resume();
+    }
+  });
+
+  await pipeline(createReadStream(workshotPath), createGunzip(), extract);
+  if (!manifest) throw new Error('manifest.json이 없습니다 — 잘못된 .workshot 파일');
+  return manifest;
+}

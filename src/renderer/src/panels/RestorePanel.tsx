@@ -304,10 +304,17 @@ export function RestorePanel({
                   active={s.id === selectedId}
                   onClick={() => setSelectedId(s.id)}
                   onDelete={async () => {
-                    if (s.id === imported?.id) setImported(null);
-                    else {
-                      await api().removeHistory(s.id);
+                    try {
+                      await api().removeHistory(s.id, s.filePath);
+                      if (s.id === imported?.id) setImported(null);
                       onChanged();
+                    } catch (e) {
+                      pushToast({
+                        kind: 'error',
+                        icon: 'bx-x-circle',
+                        title: '스냅샷 삭제 실패',
+                        message: (e as Error).message,
+                      });
                     }
                   }}
                 />

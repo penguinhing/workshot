@@ -30,7 +30,7 @@ const api = {
   restoreSnapshot: (opts: RestoreOptions & { jobId: string }): Promise<{ ok: true; autoBackupPath: string | null }> =>
     ipcRenderer.invoke(IPC.restoreSnapshot, opts),
   listHistory: (): Promise<SnapshotHistoryItem[]> => ipcRenderer.invoke(IPC.listHistory),
-  removeHistory: (id: string) => ipcRenderer.invoke(IPC.removeHistory, id),
+  removeHistory: (id: string, filePath?: string) => ipcRenderer.invoke(IPC.removeHistory, { id, filePath }),
   listProfiles: (): Promise<DBProfile[]> => ipcRenderer.invoke(IPC.listProfiles),
   saveProfile: (p: DBProfile) => ipcRenderer.invoke(IPC.saveProfile, p),
   removeProfile: (id: string) => ipcRenderer.invoke(IPC.removeProfile, id),
