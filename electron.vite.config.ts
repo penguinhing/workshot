@@ -3,12 +3,18 @@ import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
 import react from '@vitejs/plugin-react';
 
 const sharedAlias = { '@shared': resolve(__dirname, 'src/shared') };
+const compactBuild = {
+  minify: true,
+  sourcemap: false,
+  reportCompressedSize: false,
+};
 
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
     resolve: { alias: sharedAlias },
     build: {
+      ...compactBuild,
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/main/index.ts') },
       },
@@ -18,6 +24,7 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
     resolve: { alias: sharedAlias },
     build: {
+      ...compactBuild,
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/preload/index.ts') },
       },
@@ -32,6 +39,7 @@ export default defineConfig({
       },
     },
     build: {
+      ...compactBuild,
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/renderer/index.html') },
       },

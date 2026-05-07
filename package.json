@@ -1,23 +1,51 @@
 {
   "name": "workshot",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Project state + DB snapshot/restore tool",
   "main": "./out/main/index.js",
   "author": "WorkShot",
   "private": true,
   "scripts": {
     "dev": "node scripts/run-electron-vite.mjs dev",
-    "build": "electron-vite build",
+    "build": "npm run build:bundle && electron-builder",
+    "build:bundle": "electron-vite build",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "start": "node scripts/run-electron-vite.mjs preview",
-    "package": "electron-vite build && electron-builder --dir",
-    "make": "electron-vite build && electron-builder"
+    "package": "npm run build:bundle && electron-builder --dir",
+    "make": "npm run build"
   },
   "build": {
     "appId": "com.workshot",
     "productName": "WorkShot",
+    "asar": true,
+    "compression": "maximum",
+    "electronLanguages": [
+      "ko",
+      "en-US"
+    ],
+    "files": [
+      "out/**",
+      "package.json",
+      "!**/*.map",
+      "!**/*.ts",
+      "!**/*.tsx",
+      "!**/*.d.ts",
+      "!**/*.d.cts",
+      "!**/*.d.mts",
+      "!**/README*",
+      "!**/CHANGELOG*",
+      "!**/HISTORY*",
+      "!**/docs/**",
+      "!**/doc/**",
+      "!**/example/**",
+      "!**/examples/**",
+      "!**/test/**",
+      "!**/tests/**",
+      "!**/__tests__/**",
+      "!**/coverage/**"
+    ],
     "afterPack": "scripts/patch-exe-icon.cjs",
     "extraResources": [
       "icon.ico"
@@ -28,7 +56,6 @@
     }
   },
   "dependencies": {
-    "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^3.0.0",
     "electron-store": "^8.2.0",
     "tar-stream": "^3.1.7"
