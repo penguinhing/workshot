@@ -33,7 +33,7 @@
 
 ## 지원 DB
 
-현재 WorkShot에서 저장/복원을 지원하는 DB는 **PostgreSQL만**입니다.
+현재 WorkShot에서 저장/복원을 지원하는 DB 목록입니다.
 
 | DB | 지원 상태 | 비고 |
 | --- | --- | --- |
@@ -48,23 +48,6 @@
 - **Git CLI** — `PATH`에서 바로 호출 가능해야 합니다
 - **PostgreSQL 클라이언트** — `pg_dump`, `pg_restore`, `psql`가 `PATH`에 있어야 DB 저장/복원이 동작합니다 (서버는 별도 호스트여도 됨)
 
-## 배포 및 설치
-
-Release에는 Windows 설치 파일인 Setup 파일을 배포합니다.
-
-설치 파일을 실행하면 현재 사용자 계정 기준으로 아래 경로에 설치됩니다.
-
-```text
-C:\Users\<사용자>\AppData\Local\Programs\WorkShot\
-```
-
-예를 들어 Windows 사용자명이 `user`라면 실행 파일 경로는 다음과 같습니다.
-
-```text
-C:\Users\user\AppData\Local\Programs\WorkShot\WorkShot.exe
-```
-
-패키징된 앱은 `workshot.json`, `snapshots/`, `auto-backups/` 같은 런타임 데이터를 실행 파일이 있는 설치 폴더 기준으로 저장합니다.
 
 ## 개발
 
