@@ -81,6 +81,10 @@ export interface ProgressUpdate {
   steps: ProgressStep[];
 }
 
+export interface AppSettings {
+  restoreAutoBackup: boolean;
+}
+
 export interface SaveOptions {
   projectPath: string;
   dbs: DBConn[];
@@ -96,11 +100,14 @@ export interface RestoreTargetCheck {
   currentHash?: string;
 }
 
+export type RestoreMode = 'full' | 'dbOnly';
+
 export interface RestoreOptions {
   workshotPath: string;
   targetProjectPath: string;
   dbs: DBConn[];
   autoBackup?: boolean;
+  mode?: RestoreMode;
 }
 
 export interface DBTestResult {

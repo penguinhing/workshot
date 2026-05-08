@@ -3,13 +3,14 @@ import { existsSync, readdirSync, statSync, unlinkSync } from 'fs';
 import { createHash } from 'crypto';
 import { dirname, join, resolve } from 'path';
 import Store from 'electron-store';
-import type { SnapshotHistoryItem, DBProfile, DBConn } from '@shared/types';
+import type { SnapshotHistoryItem, DBProfile, DBConn, AppSettings } from '@shared/types';
 import { formatBytes, readManifestOnly } from './workshot';
 
 interface Schema {
   history: SnapshotHistoryItem[];
   profiles: DBProfile[];
   projectDbs: Record<string, DBConn[]>;
+  settings: AppSettings;
 }
 
 // "Package path": the folder where workshot.json lives.
@@ -23,7 +24,12 @@ export function getSnapshotsDir(): string {
 }
 
 const store = new Store<Schema>({
-  defaults: { history: [], profiles: [], projectDbs: {} },
+  defaults: {
+    history: [],
+    profiles: [],
+    projectDbs: {},
+    settings: { restoreAutoBackup: true },
+  },
   name: 'workshot',
   cwd: getBaseDir(),
 });
@@ -182,4 +188,17 @@ export function saveProjectDbs(projectPath: string, dbs: DBConn[]): void {
   if (existing && existing.key !== key) delete map[existing.key];
   map[key] = dbs;
   store.set('projectDbs', map);
+}
+
+export function getAppSettings(): AppSettings {
+  const settings = store.get('settings');
+  return {
+    restoreAutoBackup: settings?.restoreAutoBackup ?? true,
+  };
+}
+
+export function saveAppSettings(settings: Partial<AppSettings>): AppSettings {
+  const next = { ...getAppSettings(), ...settings };
+  store.set('settings', next);
+  return next;
 }

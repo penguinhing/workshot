@@ -4,10 +4,12 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { IPC, type WindowControlAction } from '@shared/ipc';
 import type {
+  AppSettings,
   DBConn,
   DBTestResult,
   GitInfo,
   ProgressStep,
+  RestoreMode,
   RestoreOptions,
   RestoreTargetCheck,
   SaveOptions,
@@ -223,14 +225,19 @@ export function registerIpcHandlers(window: BrowserWindow): void {
 
   ipcMain.handle(IPC.restoreSnapshot, async (_e, opts: RestoreOptions & { jobId: string }): Promise<{ ok: true; autoBackupPath: string | null }> => {
     const { jobId } = opts;
+    const mode: RestoreMode = opts.mode === 'dbOnly' ? 'dbOnly' : 'full';
+    const isFullRestore = mode === 'full';
     const shouldAutoBackup = opts.autoBackup !== false;
     let autoBackupPath: string | null = null;
     const steps: ProgressStep[] = [
       { id: 'verify', label: '파일 검증', percent: 0, status: 'pending' },
       { id: 'backup', label: shouldAutoBackup ? '현재 상태 자동 백업' : '현재 상태 백업 안 함', percent: 0, status: 'pending' },
-      { id: 'git', label: 'Git reset --hard', percent: 0, status: 'pending' },
       { id: 'db', label: `DB 복원 (${opts.dbs.length}개)`, percent: 0, status: 'pending' },
     ];
+    if (isFullRestore) {
+      steps.splice(2, 0, { id: 'git', label: 'Git reset --hard', percent: 0, status: 'pending' });
+    }
+    const dbStepIndex = isFullRestore ? 3 : 2;
     const update = (i: number, patch: Partial<ProgressStep>) => {
       steps[i] = { ...steps[i], ...patch };
       emitProgress(jobId, steps);
@@ -288,14 +295,16 @@ export function registerIpcHandlers(window: BrowserWindow): void {
       update(1, { status: 'done', percent: 100, detail: '사용 안 함' });
     }
 
-    update(2, { status: 'active', percent: 30 });
-    try {
-      await gitResetHard(opts.targetProjectPath, manifest.project.commitHash);
-    } catch (e) {
-      update(2, { status: 'error', detail: (e as Error).message.slice(0, 80) });
-      throw e;
+    if (isFullRestore) {
+      update(2, { status: 'active', percent: 30 });
+      try {
+        await gitResetHard(opts.targetProjectPath, manifest.project.commitHash);
+      } catch (e) {
+        update(2, { status: 'error', detail: (e as Error).message.slice(0, 80) });
+        throw e;
+      }
+      update(2, { status: 'done', percent: 100, detail: manifest.project.commitHash });
     }
-    update(2, { status: 'done', percent: 100, detail: manifest.project.commitHash });
 
     for (let i = 0; i < opts.dbs.length; i++) {
       const db = opts.dbs[i];
@@ -304,7 +313,7 @@ export function registerIpcHandlers(window: BrowserWindow): void {
         manifest.dbs.find((m) => m.database === db.database) ||
         manifest.dbs[i];
       if (!targetEntry) {
-        update(3, {
+        update(dbStepIndex, {
           status: 'error',
           detail: `매칭되는 DB 덤프 없음: ${db.name || db.database}`,
         });
@@ -312,7 +321,7 @@ export function registerIpcHandlers(window: BrowserWindow): void {
       }
       const dumpPath = dumpPaths[targetEntry.dumpFile];
       if (!dumpPath) throw new Error(`덤프 파일이 누락되었습니다: ${targetEntry.dumpFile}`);
-      update(3, {
+      update(dbStepIndex, {
         status: 'active',
         percent: Math.round((i / opts.dbs.length) * 100),
         detail: `${db.name || db.database} (${i + 1}/${opts.dbs.length})`,
@@ -320,11 +329,11 @@ export function registerIpcHandlers(window: BrowserWindow): void {
       try {
         await pgRestore(db, dumpPath);
       } catch (e) {
-        update(3, { status: 'error', detail: (e as Error).message.slice(0, 80) });
+        update(dbStepIndex, { status: 'error', detail: (e as Error).message.slice(0, 80) });
         throw e;
       }
     }
-    update(3, { status: 'done', percent: 100, detail: `${opts.dbs.length}개 완료` });
+    update(dbStepIndex, { status: 'done', percent: 100, detail: `${opts.dbs.length}개 완료` });
 
     // Reuse the credentials next time this target project is restored/saved.
     storeApi.saveProjectDbs(opts.targetProjectPath, opts.dbs);
@@ -346,6 +355,8 @@ export function registerIpcHandlers(window: BrowserWindow): void {
   ipcMain.handle(IPC.saveProjectDbs, async (_e, args: { projectPath: string; dbs: DBConn[] }) =>
     storeApi.saveProjectDbs(args.projectPath, args.dbs),
   );
+  ipcMain.handle(IPC.getAppSettings, async () => storeApi.getAppSettings());
+  ipcMain.handle(IPC.saveAppSettings, async (_e, settings: Partial<AppSettings>) => storeApi.saveAppSettings(settings));
 
   ipcMain.handle(IPC.openInFolder, async (_e, filePath: string) => {
     if (existsSync(filePath)) shell.showItemInFolder(filePath);

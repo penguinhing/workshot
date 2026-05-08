@@ -13,6 +13,7 @@ import type {
   DBConn,
   DBTestResult,
   ProgressStep,
+  RestoreMode,
   RestoreTargetCheck,
   SnapshotHistoryItem,
 } from '@shared/types';
@@ -76,6 +77,20 @@ function mergeStoredProjectDbs(current: DBConn[], stored: DBConn[]): { next: DBC
   return { next, matched };
 }
 
+function makeRestoreSteps(mode: RestoreMode, autoBackup: boolean, dbCount: number): ProgressStep[] {
+  const steps: ProgressStep[] = [
+    { id: 'verify', label: '파일 검증', percent: 0, status: 'pending' },
+    { id: 'backup', label: autoBackup ? '현재 상태 자동 백업' : '현재 상태 백업 안 함', percent: 0, status: 'pending' },
+  ];
+
+  if (mode === 'full') {
+    steps.push({ id: 'git', label: 'Git reset --hard', percent: 0, status: 'pending' });
+  }
+
+  steps.push({ id: 'db', label: `DB 복원 (${dbCount}개)`, percent: 0, status: 'pending' });
+  return steps;
+}
+
 export function RestorePanel({
   history,
   onChanged,
@@ -93,6 +108,8 @@ export function RestorePanel({
   const [state, setState] = useState<RestoreState>('idle');
   const [steps, setSteps] = useState<ProgressStep[]>([]);
   const [autoBackup, setAutoBackup] = useState(true);
+  const [selectedDbIds, setSelectedDbIds] = useState<Set<string>>(new Set());
+  const [lastRestoreMode, setLastRestoreMode] = useState<RestoreMode>('full');
   const restoreDbsRef = useRef<DBConn[]>([]);
 
   const items = useMemo(() => {
@@ -110,6 +127,7 @@ export function RestorePanel({
     if (!selected) {
       setRestoreDbs([]);
       restoreDbsRef.current = [];
+      setSelectedDbIds(new Set());
       setTarget(null);
       setStatuses({});
       return;
@@ -117,6 +135,7 @@ export function RestorePanel({
     const nextDbs = makeDBFromHistory(selected);
     setRestoreDbs(nextDbs);
     restoreDbsRef.current = nextDbs;
+    setSelectedDbIds(new Set(nextDbs.map((d) => d.id)));
     setTarget(null);
     setStatuses({});
     let cancelled = false;
@@ -140,6 +159,28 @@ export function RestorePanel({
     });
     return off;
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api()
+      .getAppSettings()
+      .then((settings) => {
+        if (!cancelled) setAutoBackup(settings.restoreAutoBackup);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          pushToast({
+            kind: 'warning',
+            icon: 'bx-error-circle',
+            title: '설정 불러오기 실패',
+            message: (e as Error).message,
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pushToast]);
 
   // Autofill DB credentials from stored per-project DB info.
   // This is shared with the Save tab and only keyed by target project path.
@@ -218,51 +259,108 @@ export function RestorePanel({
   }
 
   const targetValid = !!target && target.isGit && target.hashFound;
-  const dbsReady = restoreDbs.length > 0 && restoreDbs.every((d) => d.database && d.user);
-  const canRestore = !!selected && targetValid && dbsReady;
+  const selectedRestoreDbs = useMemo(
+    () => restoreDbs.filter((d) => selectedDbIds.has(d.id)),
+    [restoreDbs, selectedDbIds],
+  );
+  const allDbsReady = restoreDbs.length > 0 && restoreDbs.every((d) => d.database && d.user);
+  const selectedDbsReady =
+    selectedRestoreDbs.length > 0 && selectedRestoreDbs.every((d) => d.database && d.user);
+  const canFullRestore = !!selected && targetValid && allDbsReady;
+  const canSelectiveRestore = !!selected && selectedDbsReady;
+  const allDbSelected = restoreDbs.length > 0 && restoreDbs.every((d) => selectedDbIds.has(d.id));
   const isRunning = state === 'running';
   const isDone = state === 'done';
 
-  async function handleRestore() {
-    if (!selected || !target || !targetValid) return;
-    const jobId = `restore:${Date.now()}`;
+  function changeAutoBackup(checked: boolean) {
+    setAutoBackup(checked);
+    api()
+      .saveAppSettings({ restoreAutoBackup: checked })
+      .catch((e) => {
+        pushToast({
+          kind: 'warning',
+          icon: 'bx-error-circle',
+          title: '설정 저장 실패',
+          message: (e as Error).message,
+        });
+      });
+  }
+
+  function setDbSelected(id: string, checked: boolean) {
+    setSelectedDbIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleAllDbs() {
+    setSelectedDbIds(allDbSelected ? new Set() : new Set(restoreDbs.map((d) => d.id)));
+  }
+
+  function removeDb(idx: number) {
+    const db = restoreDbs[idx];
+    setRestoreDbs((prev) => prev.filter((_, i) => i !== idx));
+    setSelectedDbIds((prev) => {
+      const next = new Set(prev);
+      if (db) next.delete(db.id);
+      return next;
+    });
+  }
+
+  async function runRestore(mode: RestoreMode) {
+    if (!selected) return;
+    if (mode === 'full' && (!target || !targetValid)) return;
+
+    const dbs = mode === 'dbOnly' ? selectedRestoreDbs : restoreDbs;
+    if (dbs.length === 0) return;
+
+    if (mode === 'full') {
+      const confirmed = window.confirm(
+        '전체 복원을 진행하면 현재 입력하거나 수정 중인 소스코드가 스냅샷 시점으로 초기화됩니다.\n\n계속 진행할까요?',
+      );
+      if (!confirmed) return;
+    }
+
+    const modeLabel = mode === 'full' ? '전체 복원' : '선택 복원';
+    const jobId = `restore:${mode}:${Date.now()}`;
+    setLastRestoreMode(mode);
     setState('running');
-    setSteps([
-      { id: 'verify', label: '파일 검증', percent: 0, status: 'pending' },
-      { id: 'backup', label: autoBackup ? '현재 상태 자동 백업' : '현재 상태 백업 안 함', percent: 0, status: 'pending' },
-      { id: 'git', label: 'Git reset --hard', percent: 0, status: 'pending' },
-      { id: 'db', label: `DB 복원 (${restoreDbs.length}개)`, percent: 0, status: 'pending' },
-    ]);
+    setSteps(makeRestoreSteps(mode, autoBackup, dbs.length));
     pushToast({
       kind: 'info',
       icon: 'bx-loader-alt',
       message: autoBackup
-        ? '복원을 시작합니다. 현재 상태는 자동 백업됩니다.'
-        : '복원을 시작합니다. 자동 백업 없이 진행합니다.',
+        ? `${modeLabel}을 시작합니다. 현재 상태는 자동 백업됩니다.`
+        : `${modeLabel}을 시작합니다. 자동 백업 없이 진행합니다.`,
     });
     try {
       const r = await api().restoreSnapshot({
         jobId,
         workshotPath: selected.filePath,
-        targetProjectPath: target.path,
-        dbs: restoreDbs,
+        targetProjectPath: target?.path ?? selected.project,
+        dbs,
         autoBackup,
+        mode,
       });
       setState('done');
       pushToast({
         kind: 'success',
         icon: 'bx-check',
-        title: '복원 완료',
+        title: `${modeLabel} 완료`,
         message: r.autoBackupPath
           ? `자동 백업: ${r.autoBackupPath.split(/[\\/]/).pop()}`
-          : '자동 백업 없이 복원되었습니다',
+          : autoBackup
+            ? `${modeLabel}이 완료되었습니다`
+            : '자동 백업 없이 복원되었습니다',
       });
     } catch (e) {
       setState('idle');
       pushToast({
         kind: 'error',
         icon: 'bx-x-circle',
-        title: '복원 실패',
+        title: `${modeLabel} 실패`,
         message: (e as Error).message,
       });
     }
@@ -326,7 +424,7 @@ export function RestorePanel({
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0 }}>
           {isRunning || isDone ? (
             <Card
-              title={isDone ? '복원 완료' : '복원 진행 중'}
+              title={isDone ? (lastRestoreMode === 'full' ? '전체 복원 완료' : '선택 복원 완료') : '복원 진행 중'}
               icon={isDone ? 'bx-check-circle' : 'bx-loader-alt'}
               style={{ flex: 1 }}
             >
@@ -344,7 +442,9 @@ export function RestorePanel({
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <i className="bx bx-check-circle" style={{ fontSize: 22, color: COLORS.teal }} />
                     <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.teal }}>
-                      {selected ? selected.name : '스냅샷'} 시점으로 복원되었습니다
+                      {lastRestoreMode === 'full'
+                        ? `${selected ? selected.name : '스냅샷'} 시점으로 전체 복원되었습니다`
+                        : `선택한 DB ${selectedRestoreDbs.length}개가 복원되었습니다`}
                     </div>
                   </div>
                 </div>
@@ -372,7 +472,23 @@ export function RestorePanel({
                   onUseDefault={useDefaultTarget}
                 />
               </Section>
-              <Section title="DB 연결 정보 입력" subtitle="복원 대상 DB의 접속 정보를 입력하세요" noBorder>
+              <Section
+                title="DB 연결 정보 입력"
+                subtitle={`선택 복원 대상 ${selectedRestoreDbs.length}/${restoreDbs.length}개`}
+                action={
+                  restoreDbs.length > 0 ? (
+                    <Btn
+                      kind="text"
+                      size="sm"
+                      icon={allDbSelected ? 'bx-check-square' : 'bx-square'}
+                      onClick={toggleAllDbs}
+                    >
+                      {allDbSelected ? '전체 해제' : '전체 선택'}
+                    </Btn>
+                  ) : undefined
+                }
+                noBorder
+              >
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {restoreDbs.map((d, i) => (
                     <DBConnCard
@@ -381,9 +497,11 @@ export function RestorePanel({
                       index={i + 1}
                       status={statuses[d.id]}
                       onChange={(n) => updateDb(i, n)}
-                      onRemove={() => setRestoreDbs((prev) => prev.filter((_, idx) => idx !== i))}
+                      onRemove={() => removeDb(i)}
                       onTest={() => testDb(i)}
                       aliasReadOnly
+                      selected={selectedDbIds.has(d.id)}
+                      onSelectChange={(checked) => setDbSelected(d.id, checked)}
                     />
                   ))}
                 </div>
@@ -420,29 +538,47 @@ export function RestorePanel({
             gap: 8,
           }}
         >
-          {selected && !isRunning && !isDone && targetValid && dbsReady && (
+          {selected && !isRunning && !isDone && !selectedDbsReady && (
+            <>
+              <i className="bx bx-info-circle" style={{ fontSize: 13, color: COLORS.yellow }} />
+              <span>선택 복원할 DB를 체크하고 접속 정보를 입력하세요</span>
+            </>
+          )}
+          {selected && !isRunning && !isDone && selectedDbsReady && !targetValid && (
+            <>
+              <i className="bx bx-error-circle" style={{ fontSize: 13, color: COLORS.red }} />
+              <span style={{ color: COLORS.red }}>
+                전체 복원에는 유효한 프로젝트 경로가 필요합니다. 선택 복원은 DB만 적용합니다
+              </span>
+            </>
+          )}
+          {selected && !isRunning && !isDone && selectedDbsReady && targetValid && !allDbsReady && (
+            <>
+              <i className="bx bx-info-circle" style={{ fontSize: 13, color: COLORS.yellow }} />
+              <span>선택 복원은 가능합니다. 전체 복원에는 모든 DB 접속 정보가 필요합니다</span>
+            </>
+          )}
+          {selected && !isRunning && !isDone && selectedDbsReady && targetValid && allDbsReady && (
             <>
               <i
                 className={autoBackup ? 'bx bx-shield-quarter' : 'bx bx-error-circle'}
                 style={{ fontSize: 13, color: autoBackup ? COLORS.teal : COLORS.yellow }}
               />
-              <span>{autoBackup ? '복원 전 현재 상태가 자동 백업됩니다' : '자동 백업 없이 복원됩니다'}</span>
-            </>
-          )}
-          {selected && !isRunning && !isDone && !targetValid && (
-            <>
-              <i className="bx bx-error-circle" style={{ fontSize: 13, color: COLORS.red }} />
-              <span style={{ color: COLORS.red }}>적용할 프로젝트 경로가 유효하지 않습니다</span>
-            </>
-          )}
-          {selected && !isRunning && !isDone && targetValid && !dbsReady && (
-            <>
-              <i className="bx bx-info-circle" style={{ fontSize: 13, color: COLORS.yellow }} />
-              <span>복원 대상 DB의 접속 정보를 입력하세요</span>
+              <span>
+                {autoBackup
+                  ? `복원 전 현재 상태가 자동 백업됩니다. 선택 DB ${selectedRestoreDbs.length}개`
+                  : `자동 백업 없이 복원됩니다. 선택 DB ${selectedRestoreDbs.length}개`}
+              </span>
             </>
           )}
           {isRunning && <span>진행 중… 창을 닫지 마세요</span>}
-          {isDone && <span style={{ color: COLORS.teal }}>프로젝트와 DB가 스냅샷 시점으로 복원되었습니다</span>}
+          {isDone && (
+            <span style={{ color: COLORS.teal }}>
+              {lastRestoreMode === 'full'
+                ? '프로젝트와 DB가 스냅샷 시점으로 복원되었습니다'
+                : '선택한 DB가 스냅샷 시점으로 복원되었습니다'}
+            </span>
+          )}
         </div>
         {isDone ? (
           <Btn kind="primary" icon="bx-check" onClick={handleConfirm}>
@@ -461,19 +597,28 @@ export function RestorePanel({
               >
                 <Toggle
                   checked={autoBackup}
-                  onChange={setAutoBackup}
+                  onChange={changeAutoBackup}
                   label="자동 백업"
                 />
               </div>
             )}
             <Btn
-              kind="primary"
-              icon={isRunning ? undefined : 'bx-undo'}
-              loading={isRunning}
-              disabled={!canRestore || isRunning}
-              onClick={handleRestore}
+              kind="ghost"
+              icon={isRunning && lastRestoreMode === 'dbOnly' ? undefined : 'bx-data'}
+              loading={isRunning && lastRestoreMode === 'dbOnly'}
+              disabled={!canSelectiveRestore || isRunning}
+              onClick={() => runRestore('dbOnly')}
             >
-              {isRunning ? '복원 중…' : '이 시점으로 복원'}
+              {isRunning && lastRestoreMode === 'dbOnly' ? '복원 중…' : '선택 DB 복원'}
+            </Btn>
+            <Btn
+              kind="danger"
+              icon={isRunning && lastRestoreMode === 'full' ? undefined : 'bx-undo'}
+              loading={isRunning && lastRestoreMode === 'full'}
+              disabled={!canFullRestore || isRunning}
+              onClick={() => runRestore('full')}
+            >
+              {isRunning && lastRestoreMode === 'full' ? '복원 중…' : '전체 복원'}
             </Btn>
           </>
         )}

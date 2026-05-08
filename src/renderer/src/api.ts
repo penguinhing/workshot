@@ -1,5 +1,6 @@
 // Type-safe wrapper around the preload-exposed `window.workshot` API.
 import type {
+  AppSettings,
   DBConn,
   DBProfile,
   DBTestResult,
@@ -34,6 +35,8 @@ export interface WorkShotApi {
   removeProfile: (id: string) => Promise<void>;
   getProjectDbs: (projectPath: string) => Promise<DBConn[]>;
   saveProjectDbs: (projectPath: string, dbs: DBConn[]) => Promise<void>;
+  getAppSettings: () => Promise<AppSettings>;
+  saveAppSettings: (settings: Partial<AppSettings>) => Promise<AppSettings>;
   openInFolder: (filePath: string) => Promise<void>;
   getSnapshotsDir: () => Promise<string>;
   onProgress: (cb: (p: ProgressUpdate) => void) => () => void;

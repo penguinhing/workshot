@@ -22,6 +22,8 @@ export function DBConnCard({
   onTest,
   defaultCollapsed,
   aliasReadOnly,
+  selected,
+  onSelectChange,
 }: {
   conn: DBConn;
   index: number;
@@ -31,10 +33,14 @@ export function DBConnCard({
   onTest: () => void;
   defaultCollapsed?: boolean;
   aliasReadOnly?: boolean;
+  selected?: boolean;
+  onSelectChange?: (selected: boolean) => void;
 }) {
   const t = DB_TYPES.find((d) => d.id === conn.type) || DB_TYPES[0];
   const [showPw, setShowPw] = useState(false);
   const [collapsed, setCollapsed] = useState(!!defaultCollapsed);
+  const isSelectable = onSelectChange != null;
+  const isSelected = selected !== false;
 
   return (
     <div
@@ -43,6 +49,8 @@ export function DBConnCard({
         borderRadius: 12,
         background: COLORS.surface,
         overflow: 'hidden',
+        opacity: isSelectable && !isSelected ? 0.62 : 1,
+        transition: 'opacity .15s',
       }}
     >
       <div
@@ -55,6 +63,30 @@ export function DBConnCard({
           borderBottom: collapsed ? 'none' : `1px solid ${COLORS.border}`,
         }}
       >
+        {isSelectable && (
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={isSelected}
+            title={isSelected ? '선택 복원 대상에서 제외' : '선택 복원 대상에 포함'}
+            onClick={() => onSelectChange?.(!isSelected)}
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: 6,
+              border: 'none',
+              background: 'transparent',
+              color: isSelected ? COLORS.ink : COLORS.textLight,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <i className={`bx ${isSelected ? 'bx-check-square' : 'bx-square'}`} style={{ fontSize: 17 }} />
+          </button>
+        )}
         <div
           style={{
             width: 24,

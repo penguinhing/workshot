@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC, type WindowControlAction } from '../shared/ipc';
 import type {
+  AppSettings,
   DBConn,
   DBProfile,
   DBTestResult,
@@ -38,6 +39,9 @@ const api = {
     ipcRenderer.invoke(IPC.getProjectDbs, projectPath),
   saveProjectDbs: (projectPath: string, dbs: DBConn[]): Promise<void> =>
     ipcRenderer.invoke(IPC.saveProjectDbs, { projectPath, dbs }),
+  getAppSettings: (): Promise<AppSettings> => ipcRenderer.invoke(IPC.getAppSettings),
+  saveAppSettings: (settings: Partial<AppSettings>): Promise<AppSettings> =>
+    ipcRenderer.invoke(IPC.saveAppSettings, settings),
   openInFolder: (filePath: string) => ipcRenderer.invoke(IPC.openInFolder, filePath),
   getSnapshotsDir: (): Promise<string> => ipcRenderer.invoke(IPC.getSnapshotsDir),
   onProgress: (cb: (p: ProgressUpdate) => void): (() => void) => {

@@ -17,6 +17,8 @@ export const IPC = {
   removeProfile: 'workshot:removeProfile',
   getProjectDbs: 'workshot:getProjectDbs',
   saveProjectDbs: 'workshot:saveProjectDbs',
+  getAppSettings: 'workshot:getAppSettings',
+  saveAppSettings: 'workshot:saveAppSettings',
   openInFolder: 'workshot:openInFolder',
   getSnapshotsDir: 'workshot:getSnapshotsDir',
   windowControl: 'workshot:windowControl',
