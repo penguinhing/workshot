@@ -68,6 +68,7 @@ npm run make         # npm run build와 동일
 - Windows 패키징은 루트의 `icon.ico`를 앱 창 아이콘과 `WorkShot.exe` 리소스 아이콘으로 사용합니다.
 - `electron-builder`의 기본 실행 파일 리소스 편집 단계가 Windows 심볼릭 링크 권한 문제를 일으킬 수 있어 `signAndEditExecutable`은 끄고, `scripts/patch-exe-icon.cjs`의 `afterPack` 훅으로 EXE 아이콘만 후처리합니다.
 - 개발 모드에서는 `workshot.json`, `snapshots/`, `auto-backups/`가 프로젝트 루트 기준 런타임 데이터로 생성될 수 있습니다.
+- 설치된 앱은 런타임 데이터를 `%APPDATA%\WorkShot`에 저장하므로 setup 파일로 재설치해도 기존 `workshot.json`, `snapshots/`, `auto-backups/`가 유지됩니다. 이전 버전처럼 설치 폴더에 쌓인 데이터는 설치/첫 실행 시 새 위치로 이관됩니다.
 
 ## `.workshot` 파일 형식
 

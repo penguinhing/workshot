@@ -1,5 +1,6 @@
 {
   "name": "workshot",
+  "productName": "WorkShot",
   "version": "0.0.2",
   "description": "Project state + DB snapshot/restore tool",
   "main": "./out/main/index.js",
@@ -53,6 +54,9 @@
     "win": {
       "icon": "icon.ico",
       "signAndEditExecutable": false
+    },
+    "nsis": {
+      "include": "build/installer.nsh"
     }
   },
   "dependencies": {

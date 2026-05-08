@@ -1,7 +1,14 @@
 import { app } from 'electron';
-import { existsSync, readdirSync, statSync, unlinkSync } from 'fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  statSync,
+  unlinkSync,
+} from 'fs';
 import { createHash } from 'crypto';
-import { dirname, join, resolve } from 'path';
+import { dirname, join, relative, resolve, sep } from 'path';
 import Store from 'electron-store';
 import type { SnapshotHistoryItem, DBProfile, DBConn, AppSettings } from '@shared/types';
 import { formatBytes, readManifestOnly } from './workshot';
@@ -13,15 +20,81 @@ interface Schema {
   settings: AppSettings;
 }
 
-// "Package path": the folder where workshot.json lives.
-// Dev mode → project root; packaged → folder containing the exe.
+// Dev mode uses the project root. Packaged builds use AppData so reinstalling does not remove snapshots.
+const packagedDataDirName = 'WorkShot';
+const portableDataDirs = ['snapshots', 'auto-backups'] as const;
+
+function getPackagedDataDir(): string {
+  return join(app.getPath('appData'), packagedDataDirName);
+}
+
+function getLegacyPackageDir(): string | null {
+  if (!app.isPackaged) return null;
+  return dirname(app.getPath('exe'));
+}
+
 export function getBaseDir(): string {
-  return app.isPackaged ? dirname(app.getPath('exe')) : app.getAppPath();
+  return app.isPackaged ? getPackagedDataDir() : app.getAppPath();
 }
 
 export function getSnapshotsDir(): string {
   return join(getBaseDir(), 'snapshots');
 }
+
+function pathKey(filePath: string): string {
+  const key = resolve(filePath);
+  return process.platform === 'win32' ? key.toLowerCase() : key;
+}
+
+function samePath(a: string, b: string): boolean {
+  return pathKey(a) === pathKey(b);
+}
+
+function isPathAtOrInside(childPath: string, parentPath: string): boolean {
+  const child = pathKey(childPath);
+  const parent = pathKey(parentPath);
+  return child === parent || child.startsWith(parent.endsWith(sep) ? parent : `${parent}${sep}`);
+}
+
+function copyFileIfMissing(source: string, target: string): void {
+  if (!existsSync(source) || existsSync(target)) return;
+  mkdirSync(dirname(target), { recursive: true });
+  copyFileSync(source, target);
+}
+
+function copyDirectoryContentsIfMissing(sourceDir: string, targetDir: string): void {
+  if (!existsSync(sourceDir) || !statSync(sourceDir).isDirectory()) return;
+  mkdirSync(targetDir, { recursive: true });
+
+  for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
+    const source = join(sourceDir, entry.name);
+    const target = join(targetDir, entry.name);
+
+    if (entry.isDirectory()) {
+      copyDirectoryContentsIfMissing(source, target);
+    } else if (entry.isFile()) {
+      copyFileIfMissing(source, target);
+    }
+  }
+}
+
+function migrateLegacyPackageData(): void {
+  const legacyDir = getLegacyPackageDir();
+  if (!legacyDir || samePath(legacyDir, getBaseDir())) return;
+
+  try {
+    mkdirSync(getBaseDir(), { recursive: true });
+    copyFileIfMissing(join(legacyDir, 'workshot.json'), join(getBaseDir(), 'workshot.json'));
+
+    for (const dir of portableDataDirs) {
+      copyDirectoryContentsIfMissing(join(legacyDir, dir), join(getBaseDir(), dir));
+    }
+  } catch (e) {
+    console.warn('[workshot] failed to migrate legacy package data', e);
+  }
+}
+
+migrateLegacyPackageData();
 
 const store = new Store<Schema>({
   defaults: {
@@ -33,6 +106,38 @@ const store = new Store<Schema>({
   name: 'workshot',
   cwd: getBaseDir(),
 });
+
+function migrateLegacyHistoryPaths(): void {
+  const legacyDir = getLegacyPackageDir();
+  if (!legacyDir || samePath(legacyDir, getBaseDir())) return;
+
+  const legacySnapshotsDir = join(legacyDir, 'snapshots');
+  const snapshotsDir = getSnapshotsDir();
+  const history = store.get('history') ?? [];
+  let changed = false;
+
+  const next = history.map((item) => {
+    const itemPath = resolve(item.filePath);
+    let candidate: string | null = null;
+
+    if (isPathAtOrInside(itemPath, legacySnapshotsDir)) {
+      candidate = join(snapshotsDir, relative(legacySnapshotsDir, itemPath));
+    } else if (!existsSync(itemPath)) {
+      candidate = join(snapshotsDir, itemPath.split(/[\\/]/).pop() ?? '');
+    }
+
+    if (candidate && existsSync(candidate) && !samePath(item.filePath, candidate)) {
+      changed = true;
+      return { ...item, filePath: candidate };
+    }
+
+    return item;
+  });
+
+  if (changed) store.set('history', next);
+}
+
+migrateLegacyHistoryPaths();
 
 function projectDbKey(projectPath: string): string | null {
   const trimmed = projectPath.trim();
@@ -59,8 +164,7 @@ export function listHistory(): SnapshotHistoryItem[] {
 }
 
 function historyPathKey(filePath: string): string {
-  const key = resolve(filePath);
-  return process.platform === 'win32' ? key.toLowerCase() : key;
+  return pathKey(filePath);
 }
 
 function snapshotIdForPath(filePath: string): string {
