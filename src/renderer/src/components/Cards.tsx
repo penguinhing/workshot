@@ -551,26 +551,29 @@ function ValidationLine({
 export function SnapshotListItem({
   snap,
   active,
+  disabled = false,
   onClick,
   onDelete,
 }: {
   snap: SnapshotHistoryItem;
   active: boolean;
+  disabled?: boolean;
   onClick: () => void;
   onDelete: () => void;
 }) {
   const [hover, setHover] = useState(false);
   return (
     <div
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
         padding: '10px 12px',
         borderRadius: 8,
-        border: `1px solid ${active ? COLORS.borderStrong : hover ? COLORS.border : 'transparent'}`,
-        background: active ? COLORS.surface : hover ? COLORS.surfaceSubtle : 'transparent',
-        cursor: 'pointer',
+        border: `1px solid ${active ? COLORS.borderStrong : !disabled && hover ? COLORS.border : 'transparent'}`,
+        background: active ? COLORS.surface : !disabled && hover ? COLORS.surfaceSubtle : 'transparent',
+        cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.65 : 1,
         transition: 'all .15s',
         display: 'flex',
         flexDirection: 'column',
@@ -610,7 +613,7 @@ export function SnapshotListItem({
             {snap.timestamp} · {snap.size}
           </div>
         </div>
-        {hover && (
+        {hover && !disabled && (
           <button
             onClick={(e) => {
               e.stopPropagation();

@@ -80,14 +80,17 @@ function mergeStoredProjectDbs(current: DBConn[], stored: DBConn[]): { next: DBC
 function makeRestoreSteps(mode: RestoreMode, autoBackup: boolean, dbCount: number): ProgressStep[] {
   const steps: ProgressStep[] = [
     { id: 'verify', label: '파일 검증', percent: 0, status: 'pending' },
-    { id: 'backup', label: autoBackup ? '현재 상태 자동 백업' : '현재 상태 백업 안 함', percent: 0, status: 'pending' },
   ];
+
+  if (autoBackup) {
+    steps.push({ id: 'backup', label: '현재 상태 자동 백업', percent: 0, status: 'pending' });
+  }
 
   if (mode === 'full') {
     steps.push({ id: 'git', label: 'Git reset --hard', percent: 0, status: 'pending' });
   }
 
-  steps.push({ id: 'db', label: `DB 복원 (${dbCount}개)`, percent: 0, status: 'pending' });
+  steps.push({ id: 'db', label: `DB 재생성 및 복원 (${dbCount}개)`, percent: 0, status: 'pending' });
   return steps;
 }
 
@@ -271,6 +274,7 @@ export function RestorePanel({
   const allDbSelected = restoreDbs.length > 0 && restoreDbs.every((d) => selectedDbIds.has(d.id));
   const isRunning = state === 'running';
   const isDone = state === 'done';
+  const snapshotSelectionLocked = isRunning || isDone;
 
   function changeAutoBackup(checked: boolean) {
     setAutoBackup(checked);
@@ -317,8 +321,17 @@ export function RestorePanel({
     if (dbs.length === 0) return;
 
     if (mode === 'full') {
+      const dbSummary = dbs
+        .map((db) => db.name || db.database)
+        .filter(Boolean)
+        .slice(0, 3)
+        .join(', ');
+      const dbTail = dbs.length > 3 ? ` 외 ${dbs.length - 3}개` : '';
+      const backupLine = autoBackup
+        ? '현재 DB 상태는 복원 전에 자동 백업됩니다.'
+        : '자동 백업이 꺼져 있어 현재 DB 상태는 별도로 보존되지 않습니다.';
       const confirmed = window.confirm(
-        '전체 복원을 진행하면 현재 입력하거나 수정 중인 소스코드가 스냅샷 시점으로 초기화됩니다.\n\n계속 진행할까요?',
+        `전체 복원을 진행하면 현재 입력하거나 수정 중인 소스코드가 스냅샷 시점으로 초기화됩니다.\n\n선택한 DB ${dbs.length}개(${dbSummary}${dbTail})는 기존 DB를 삭제한 뒤 스냅샷 기준으로 새로 생성됩니다.\n${backupLine}\n\n계속 진행할까요?`,
       );
       if (!confirmed) return;
     }
@@ -383,7 +396,13 @@ export function RestorePanel({
           style={{ width: 260, flexShrink: 0 }}
           subtitle={`${items.length}건`}
           action={
-            <Btn kind="text" size="sm" icon="bx-import" onClick={pickWorkshotFile}>
+            <Btn
+              kind="text"
+              size="sm"
+              icon="bx-import"
+              disabled={snapshotSelectionLocked}
+              onClick={pickWorkshotFile}
+            >
               파일 열기
             </Btn>
           }
@@ -400,8 +419,12 @@ export function RestorePanel({
                   key={s.id}
                   snap={s}
                   active={s.id === selectedId}
+                  disabled={snapshotSelectionLocked}
                   onClick={() => setSelectedId(s.id)}
                   onDelete={async () => {
+                    if (snapshotSelectionLocked) return;
+                    const confirmed = window.confirm(`'${s.name}' 스냅샷을 삭제할까요?`);
+                    if (!confirmed) return;
                     try {
                       await api().removeHistory(s.id, s.filePath);
                       if (s.id === imported?.id) setImported(null);
@@ -566,8 +589,8 @@ export function RestorePanel({
               />
               <span>
                 {autoBackup
-                  ? `복원 전 현재 상태가 자동 백업됩니다. 선택 DB ${selectedRestoreDbs.length}개`
-                  : `자동 백업 없이 복원됩니다. 선택 DB ${selectedRestoreDbs.length}개`}
+                  ? `복원 전 현재 상태가 자동 백업됩니다. 선택 DB ${selectedRestoreDbs.length}개는 재생성됩니다`
+                  : `자동 백업 없이 DB를 삭제 후 재생성합니다. 선택 DB ${selectedRestoreDbs.length}개`}
               </span>
             </>
           )}
@@ -575,8 +598,8 @@ export function RestorePanel({
           {isDone && (
             <span style={{ color: COLORS.teal }}>
               {lastRestoreMode === 'full'
-                ? '프로젝트와 DB가 스냅샷 시점으로 복원되었습니다'
-                : '선택한 DB가 스냅샷 시점으로 복원되었습니다'}
+                ? '프로젝트와 DB가 스냅샷 시점으로 재생성/복원되었습니다'
+                : '선택한 DB가 스냅샷 시점으로 재생성/복원되었습니다'}
             </span>
           )}
         </div>

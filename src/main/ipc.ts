@@ -231,13 +231,17 @@ export function registerIpcHandlers(window: BrowserWindow): void {
     let autoBackupPath: string | null = null;
     const steps: ProgressStep[] = [
       { id: 'verify', label: '파일 검증', percent: 0, status: 'pending' },
-      { id: 'backup', label: shouldAutoBackup ? '현재 상태 자동 백업' : '현재 상태 백업 안 함', percent: 0, status: 'pending' },
-      { id: 'db', label: `DB 복원 (${opts.dbs.length}개)`, percent: 0, status: 'pending' },
     ];
-    if (isFullRestore) {
-      steps.splice(2, 0, { id: 'git', label: 'Git reset --hard', percent: 0, status: 'pending' });
+    if (shouldAutoBackup) {
+      steps.push({ id: 'backup', label: '현재 상태 자동 백업', percent: 0, status: 'pending' });
     }
-    const dbStepIndex = isFullRestore ? 3 : 2;
+    if (isFullRestore) {
+      steps.push({ id: 'git', label: 'Git reset --hard', percent: 0, status: 'pending' });
+    }
+    steps.push({ id: 'db', label: `DB 재생성 및 복원 (${opts.dbs.length}개)`, percent: 0, status: 'pending' });
+    const backupStepIndex = steps.findIndex((s) => s.id === 'backup');
+    const gitStepIndex = steps.findIndex((s) => s.id === 'git');
+    const dbStepIndex = steps.findIndex((s) => s.id === 'db');
     const update = (i: number, patch: Partial<ProgressStep>) => {
       steps[i] = { ...steps[i], ...patch };
       emitProgress(jobId, steps);
@@ -248,7 +252,7 @@ export function registerIpcHandlers(window: BrowserWindow): void {
     update(0, { status: 'done', percent: 100, detail: 'OK' });
 
     if (shouldAutoBackup) {
-      update(1, { status: 'active', percent: 20 });
+      update(backupStepIndex, { status: 'active', percent: 20 });
       const targetGit = await readGitInfo(opts.targetProjectPath);
       const backupName = `auto-backup-${Date.now()}.workshot`;
       const autoBackupDir = join(storeApi.getBaseDir(), 'auto-backups');
@@ -290,20 +294,18 @@ export function registerIpcHandlers(window: BrowserWindow): void {
       await packWorkshot({ manifest: backupManifest, dumpFiles: backupDumpFiles, outFile: backupPath });
       for (const f of backupDumpFiles) { try { unlinkSync(f.path); } catch { /* ignore */ } }
       autoBackupPath = backupPath;
-      update(1, { status: 'done', percent: 100, detail: backupName });
-    } else {
-      update(1, { status: 'done', percent: 100, detail: '사용 안 함' });
+      update(backupStepIndex, { status: 'done', percent: 100, detail: backupName });
     }
 
     if (isFullRestore) {
-      update(2, { status: 'active', percent: 30 });
+      update(gitStepIndex, { status: 'active', percent: 30 });
       try {
         await gitResetHard(opts.targetProjectPath, manifest.project.commitHash);
       } catch (e) {
-        update(2, { status: 'error', detail: (e as Error).message.slice(0, 80) });
+        update(gitStepIndex, { status: 'error', detail: (e as Error).message.slice(0, 80) });
         throw e;
       }
-      update(2, { status: 'done', percent: 100, detail: manifest.project.commitHash });
+      update(gitStepIndex, { status: 'done', percent: 100, detail: manifest.project.commitHash });
     }
 
     for (let i = 0; i < opts.dbs.length; i++) {
