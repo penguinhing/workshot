@@ -42,6 +42,7 @@ const api = {
   getAppSettings: (): Promise<AppSettings> => ipcRenderer.invoke(IPC.getAppSettings),
   saveAppSettings: (settings: Partial<AppSettings>): Promise<AppSettings> =>
     ipcRenderer.invoke(IPC.saveAppSettings, settings),
+  getAppVersion: (): Promise<string> => ipcRenderer.invoke(IPC.getAppVersion),
   openInFolder: (filePath: string) => ipcRenderer.invoke(IPC.openInFolder, filePath),
   getSnapshotsDir: (): Promise<string> => ipcRenderer.invoke(IPC.getSnapshotsDir),
   onProgress: (cb: (p: ProgressUpdate) => void): (() => void) => {

@@ -1,7 +1,7 @@
 {
   "name": "workshot",
   "productName": "WorkShot",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Project state + DB snapshot/restore tool",
   "main": "./out/main/index.js",
   "author": "WorkShot",
@@ -13,6 +13,7 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "set-version": "npm version --no-git-tag-version",
     "start": "node scripts/run-electron-vite.mjs preview",
     "package": "npm run build:bundle && electron-builder --dir",
     "make": "npm run build"

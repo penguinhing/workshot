@@ -359,6 +359,7 @@ export function registerIpcHandlers(window: BrowserWindow): void {
   );
   ipcMain.handle(IPC.getAppSettings, async () => storeApi.getAppSettings());
   ipcMain.handle(IPC.saveAppSettings, async (_e, settings: Partial<AppSettings>) => storeApi.saveAppSettings(settings));
+  ipcMain.handle(IPC.getAppVersion, async () => app.getVersion());
 
   ipcMain.handle(IPC.openInFolder, async (_e, filePath: string) => {
     if (existsSync(filePath)) shell.showItemInFolder(filePath);

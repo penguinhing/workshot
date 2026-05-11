@@ -37,6 +37,7 @@ export interface WorkShotApi {
   saveProjectDbs: (projectPath: string, dbs: DBConn[]) => Promise<void>;
   getAppSettings: () => Promise<AppSettings>;
   saveAppSettings: (settings: Partial<AppSettings>) => Promise<AppSettings>;
+  getAppVersion: () => Promise<string>;
   openInFolder: (filePath: string) => Promise<void>;
   getSnapshotsDir: () => Promise<string>;
   onProgress: (cb: (p: ProgressUpdate) => void) => () => void;

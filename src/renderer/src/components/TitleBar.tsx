@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { COLORS, MONO } from '../theme';
 import { api } from '../api';
 
 export function TitleBar() {
   const [hover, setHover] = useState<string | null>(null);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
   const btnBase: React.CSSProperties = {
     width: 46,
     height: 40,
@@ -18,6 +19,21 @@ export function TitleBar() {
     transition: 'background .12s, color .12s',
     WebkitAppRegion: 'no-drag',
   } as React.CSSProperties;
+
+  useEffect(() => {
+    let mounted = true;
+    api()
+      .getAppVersion()
+      .then((version) => {
+        if (mounted) setAppVersion(version);
+      })
+      .catch(() => {
+        if (mounted) setAppVersion(null);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <div
@@ -37,7 +53,9 @@ export function TitleBar() {
         <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.primary, letterSpacing: 0 }}>
           WorkShot
         </span>
-        <span style={{ fontFamily: MONO, fontSize: 10.5, color: COLORS.textLight }}>v0.0.3</span>
+        {appVersion && (
+          <span style={{ fontFamily: MONO, fontSize: 10.5, color: COLORS.textLight }}>v{appVersion}</span>
+        )}
       </div>
       <div style={{ display: 'flex', alignItems: 'stretch' }}>
         <button
